@@ -110,6 +110,9 @@ public partial class ReadMeTest
         }
 
         var processorDirectories = Directory.EnumerateDirectories(benchmarksDirectory).ToArray();
+        if (processorDirectories.Length == 0)
+            return;
+
         var readmeLines = File.ReadAllLines(readmeFilePath);
 
         foreach (var (fileName, config) in benchmarkFileNameToConfig)
