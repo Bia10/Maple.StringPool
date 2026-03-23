@@ -123,7 +123,7 @@ jobs:
           egress-policy: audit
       - uses: actions/checkout@v4 # TODO: Pin to full SHA
       - name: Download nuget packages
-        uses: actions/download-artifact@v4 # TODO: Pin to full SHA
+        uses: actions/download-artifact@v8 # TODO: Pin to full SHA
         with:
           name: nuget
           path: ${{ env.NuGetDirectory }}
