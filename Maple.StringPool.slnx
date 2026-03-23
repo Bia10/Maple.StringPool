@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Maple.StringPool/Maple.StringPool.csproj" />
+  <Project Path="src/Maple.StringPool.Test/Maple.StringPool.Test.csproj" />
+  <Project Path="src/Maple.StringPool.XyzTest/Maple.StringPool.XyzTest.csproj" />
+  <Project Path="src/Maple.StringPool.Benchmarks/Maple.StringPool.Benchmarks.csproj" />
+  <Project Path="src/Maple.StringPool.ComparisonBenchmarks/Maple.StringPool.ComparisonBenchmarks.csproj" />
+  <Project Path="src/Maple.StringPool.Cli/Maple.StringPool.Cli.csproj" />
+</Solution>
