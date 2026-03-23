@@ -1,0 +1,49 @@
+<Project>
+  <PropertyGroup>
+    <MinVerDefaultPreReleaseIdentifiers>preview</MinVerDefaultPreReleaseIdentifiers>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerVerbosity>minimal</MinVerVerbosity>
+
+    <Company>Bia10</Company>
+    <Authors>Bia10</Authors>
+    <Copyright>Copyright © Bia10 2026</Copyright>
+    <NeutralLanguage>en</NeutralLanguage>
+
+    <TargetFramework>net10.0</TargetFramework>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+
+    <LangVersion>14.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
+    <Nullable>enable</Nullable>
+
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)../artifacts</ArtifactsPath>
+    <VSTestResultsDirectory>$(ArtifactsPath)/TestResults</VSTestResultsDirectory>
+
+    <PublishRelease>true</PublishRelease>
+    <PackRelease>true</PackRelease>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CSharpier.MsBuild" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

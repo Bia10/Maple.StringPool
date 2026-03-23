@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>sp</AssemblyName>
+    <RootNamespace>Maple.StringPool.Cli</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <Optimize>true</Optimize>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Maple.StringPool/Maple.StringPool.csproj" />
+  </ItemGroup>
+</Project>
