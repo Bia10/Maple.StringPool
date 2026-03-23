@@ -7,7 +7,7 @@
 [![Nuget](https://img.shields.io/nuget/v/Maple.StringPool?color=purple)](https://www.nuget.org/packages/Maple.StringPool/)
 [![License](https://img.shields.io/github/license/Bia10/Maple.StringPool)](https://github.com/Bia10/Maple.StringPool/blob/main/LICENSE)
 
-Zero-allocation decoder for the MapleStory GMS v95 `StringPool` singleton.
+Zero-allocation decoder for the MapleStory GMS v95 `StringPool` singleton. Cross-platform, trimmable and AOT/NativeAOT compatible.
 
 ⭐ Please star this project if you like it. ⭐
 
