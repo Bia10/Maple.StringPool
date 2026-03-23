@@ -131,6 +131,8 @@ sp MapleStory.exe info
 ## Public API Reference
 
 ```csharp
+[assembly: System.Reflection.AssemblyMetadata("IsAotCompatible", "True")]
+[assembly: System.Reflection.AssemblyMetadata("IsTrimmable", "True")]
 [assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/Bia10/Maple.StringPool/")]
 [assembly: System.Resources.NeutralResourcesLanguage("en")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Maple.StringPool.Benchmarks")]

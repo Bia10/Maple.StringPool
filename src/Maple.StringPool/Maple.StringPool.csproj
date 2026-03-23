@@ -3,7 +3,13 @@
     <RootNamespace>Maple.StringPool</RootNamespace>
     <IsPackable>true</IsPackable>
 
-    <Description>Zero-allocation decoder for the MapleStory GMS v95 StringPool singleton.</Description>
+    <Description>Zero-allocation decoder for the MapleStory GMS v95 StringPool singleton. Cross-platform, trimmable and AOT/NativeAOT compatible.</Description>
+
+    <!-- AOT/Trimming: ENFORCE from day one. -->
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAOTAnalyzer>true</EnableAOTAnalyzer>
 
     <PackageId>Maple.StringPool</PackageId>
     <PackageTags>maplestory;game-reverse-engineering;stringpool;decoder;maple-re</PackageTags>
