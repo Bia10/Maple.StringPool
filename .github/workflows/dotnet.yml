@@ -31,14 +31,14 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2 # TODO: Pin to full SHA before merging to main
+        uses: step-security/harden-runner@5c7944e73c4c2a096b17a9cb74d65b6c2bbafbde # v2.9.1
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup .NET (global.json)
-        uses: actions/setup-dotnet@v4 # TODO: Pin to full SHA
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
 
@@ -56,7 +56,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: matrix.configuration == 'Release'
-        uses: codecov/codecov-action@v5 # TODO: Pin to full SHA
+        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
         with:
           flags: ${{ matrix.os }}
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -65,12 +65,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2 # TODO: Pin to full SHA
+        uses: step-security/harden-runner@5c7944e73c4c2a096b17a9cb74d65b6c2bbafbde # v2.9.1
         with:
           egress-policy: audit
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4 # TODO: Pin to full SHA
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
       - name: Restore tools
@@ -86,22 +86,22 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2 # TODO: Pin to full SHA
+        uses: step-security/harden-runner@5c7944e73c4c2a096b17a9cb74d65b6c2bbafbde # v2.9.1
         with:
           egress-policy: audit
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
       - name: Create tag (to set version)
         if: ${{ github.event.inputs.version != '' && github.actor == 'Bia10' }}
         run: git tag v${{ github.event.inputs.version }}
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4 # TODO: Pin to full SHA
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
       - name: Pack NuGet package
         run: dotnet pack -c Release --output ${{ env.NuGetDirectory }}
-      - uses: actions/upload-artifact@v4 # TODO: Pin to full SHA
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: nuget
           if-no-files-found: error
@@ -118,17 +118,17 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2 # TODO: Pin to full SHA
+        uses: step-security/harden-runner@5c7944e73c4c2a096b17a9cb74d65b6c2bbafbde # v2.9.1
         with:
           egress-policy: audit
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Download nuget packages
-        uses: actions/download-artifact@v4 # TODO: Pin to full SHA
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: nuget
           path: ${{ env.NuGetDirectory }}
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4 # TODO: Pin to full SHA
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
       - name: Push packages
