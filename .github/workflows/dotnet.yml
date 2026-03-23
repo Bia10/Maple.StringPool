@@ -35,7 +35,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@v6 # TODO: Pin to full SHA
 
       - name: Setup .NET (global.json)
         uses: actions/setup-dotnet@v4 # TODO: Pin to full SHA
@@ -68,7 +68,7 @@ jobs:
         uses: step-security/harden-runner@v2 # TODO: Pin to full SHA
         with:
           egress-policy: audit
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@v6 # TODO: Pin to full SHA
       - name: Setup .NET
         uses: actions/setup-dotnet@v4 # TODO: Pin to full SHA
         with:
@@ -89,7 +89,7 @@ jobs:
         uses: step-security/harden-runner@v2 # TODO: Pin to full SHA
         with:
           egress-policy: audit
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@v6 # TODO: Pin to full SHA
         with:
           fetch-depth: 0
       - name: Create tag (to set version)
@@ -121,7 +121,7 @@ jobs:
         uses: step-security/harden-runner@v2 # TODO: Pin to full SHA
         with:
           egress-policy: audit
-      - uses: actions/checkout@v4 # TODO: Pin to full SHA
+      - uses: actions/checkout@v6 # TODO: Pin to full SHA
       - name: Download nuget packages
         uses: actions/download-artifact@v4 # TODO: Pin to full SHA
         with:
