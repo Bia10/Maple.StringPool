@@ -49,16 +49,16 @@ jobs:
         run: dotnet build -c ${{ matrix.configuration }} --no-restore
 
       - name: Test (Maple.StringPool.Test)
-        run: dotnet run --project src/Maple.StringPool.Test/Maple.StringPool.Test.csproj -c ${{ matrix.configuration }} --no-build -- --coverage --coverage-output-format cobertura --coverage-output coverage-test.cobertura.xml
+        run: dotnet run --project src/Maple.StringPool.Test/Maple.StringPool.Test.csproj -c ${{ matrix.configuration }} --no-build -- --coverage --coverage-output-format cobertura --coverage-output ${{ github.workspace }}/coverage-test.cobertura.xml
 
       - name: Test (Maple.StringPool.XyzTest)
-        run: dotnet run --project src/Maple.StringPool.XyzTest/Maple.StringPool.XyzTest.csproj -c ${{ matrix.configuration }} --no-build -- --coverage --coverage-output-format cobertura --coverage-output coverage-xyztest.cobertura.xml
+        run: dotnet run --project src/Maple.StringPool.XyzTest/Maple.StringPool.XyzTest.csproj -c ${{ matrix.configuration }} --no-build -- --coverage --coverage-output-format cobertura --coverage-output ${{ github.workspace }}/coverage-xyztest.cobertura.xml
 
       - name: Upload coverage to Codecov
         if: matrix.configuration == 'Release'
         uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
         with:
-          files: coverage-test.cobertura.xml,coverage-xyztest.cobertura.xml
+          files: ${{ github.workspace }}/coverage-test.cobertura.xml,${{ github.workspace }}/coverage-xyztest.cobertura.xml
           flags: ${{ matrix.os }}
           token: ${{ secrets.CODECOV_TOKEN }}
 
