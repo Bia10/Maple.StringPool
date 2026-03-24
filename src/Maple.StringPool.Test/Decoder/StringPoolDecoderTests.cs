@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Maple.StringPool.NativeTypes;
 using Maple.StringPool.Test.Helpers;
 
@@ -352,6 +352,19 @@ public sealed class StringPoolDecoderTests
         return reader;
     }
 
+    // ── Constructor: null reader ──────────────────────────────────────────────
+
+    [Test]
+    public async Task Constructor_NullReader_ThrowsArgumentNullException()
+    {
+        await Assert
+            .That(() =>
+            {
+                _ = new StringPoolDecoder(null!);
+            })
+            .Throws<ArgumentNullException>();
+    }
+
     // ── Constructor validation ────────────────────────────────────────────────
 
     [Test]
@@ -507,5 +520,322 @@ public sealed class StringPoolDecoderTests
 
         using StringPoolDecoder pool = new(reader);
         await Assert.That(pool.GetString(slot)).IsEqualTo(expected);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Factory methods: Open / FromBytes
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Tests for <see cref="StringPoolDecoder.Open"/> and
+/// <see cref="StringPoolDecoder.FromBytes"/> convenience factories.
+/// </summary>
+public sealed class StringPoolDecoderFactoryTests
+{
+    // ── Shared helpers (duplicated from the main fixture for isolation) ────────
+
+    private static readonly byte[] TestMasterKey =
+    [
+        0x6C,
+        0xEB,
+        0xBC,
+        0x5E,
+        0x4B,
+        0xCC,
+        0x47,
+        0x5D,
+        0x3E,
+        0x3B,
+        0xC2,
+        0x90,
+        0x82,
+        0xDA,
+        0x69,
+        0x83,
+    ];
+
+    private const long OffMsNKeySize = 0xB98840 - 0x400000;
+    private const long OffMsNSize = 0xB98844 - 0x400000;
+    private const long OffMsAKey = 0xB98830 - 0x400000;
+    private const long OffMsAString = 0xC5A878 - 0x400000;
+    private const long EntryBlobBase = 0x820000;
+    private const int StubSlotCount = 100;
+
+    // Slot 8 → "Tahoma" (seed=0, same TestMasterKey)
+    private static readonly byte[] Slot8EncBody = [0x38, 0x8A, 0xD4, 0x31, 0x26, 0xAD];
+
+    private static StubPeImageReader BuildStubImage()
+    {
+        var reader = new StubPeImageReader();
+        reader.WriteUInt32At(OffMsNKeySize, (uint)TestMasterKey.Length);
+        reader.WriteUInt32At(OffMsNSize, (uint)StubSlotCount);
+        reader.WriteAt(OffMsAKey, TestMasterKey);
+
+        long entryOffset = EntryBlobBase + (8 * 0x100);
+        byte[] entry = new byte[1 + Slot8EncBody.Length + 1];
+        entry[0] = 0x00;
+        Buffer.BlockCopy(Slot8EncBody, 0, entry, 1, Slot8EncBody.Length);
+        reader.WriteAt(entryOffset, entry);
+
+        uint entryVa = (uint)(KnownLayouts.GmsV95.ImageBase + entryOffset);
+        reader.WriteUInt32At(OffMsAString + 8 * TypeSizes.Pointer, entryVa);
+
+        return reader;
+    }
+
+    // ── StringPoolDecoder.Open ────────────────────────────────────────────────
+
+    [Test]
+    public async Task Open_NullPath_ThrowsArgumentNullException()
+    {
+        await Assert.That(() => StringPoolDecoder.Open(null!)).Throws<ArgumentNullException>();
+    }
+
+    [Test]
+    public async Task Open_NonExistentFile_ThrowsFileNotFoundException()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "maple_test_no_such_file_4d5e6f.exe");
+
+        await Assert.That(() => StringPoolDecoder.Open(path)).Throws<FileNotFoundException>();
+    }
+
+    [Test]
+    public async Task Open_FileWithInvalidMeta_DisposesReaderAndRethrows()
+    {
+        // A tiny (256-byte) file is too small for GmsV95 addresses →
+        // FileOffset throws InvalidDataException → catch block disposes reader and re-throws.
+        string tmpFile = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(tmpFile, new byte[256]);
+
+            await Assert.That(() => StringPoolDecoder.Open(tmpFile)).Throws<InvalidDataException>();
+        }
+        finally
+        {
+            if (File.Exists(tmpFile))
+                File.Delete(tmpFile);
+        }
+    }
+
+    [Test]
+    public async Task Open_ValidFile_DecodesExpectedSlot()
+    {
+        // Build the stub byte array, write it to a temp file, then decode via Open.
+        byte[] imageBytes = BuildStubImage().Image.ToArray();
+        string tmpFile = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(tmpFile, imageBytes);
+
+            using StringPoolDecoder pool = StringPoolDecoder.Open(tmpFile);
+
+            await Assert.That(pool.GetString(8)).IsEqualTo("Tahoma");
+            await Assert.That(pool.Count).IsEqualTo(StubSlotCount);
+        }
+        finally
+        {
+            if (File.Exists(tmpFile))
+                File.Delete(tmpFile);
+        }
+    }
+
+    // ── StringPoolDecoder.FromBytes ───────────────────────────────────────────
+
+    [Test]
+    public async Task FromBytes_NullArgument_ThrowsArgumentNullException()
+    {
+        await Assert.That(() => StringPoolDecoder.FromBytes(null!)).Throws<ArgumentNullException>();
+    }
+
+    [Test]
+    public async Task FromBytes_InvalidMeta_DisposesReaderAndRethrows()
+    {
+        // 256-byte zeroed array → FileOffset throws (image too small for GmsV95 addresses).
+        await Assert.That(() => StringPoolDecoder.FromBytes(new byte[256])).Throws<InvalidDataException>();
+    }
+
+    [Test]
+    public async Task FromBytes_ValidImage_DecodesExpectedSlot()
+    {
+        byte[] imageBytes = BuildStubImage().Image.ToArray();
+
+        using StringPoolDecoder pool = StringPoolDecoder.FromBytes(imageBytes);
+
+        await Assert.That(pool.GetString(8)).IsEqualTo("Tahoma");
+        await Assert.That(pool.Count).IsEqualTo(StubSlotCount);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// FileOffset error paths and DecodeSlot edge cases
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Tests for <c>FileOffset</c> throw paths and <c>DecodeSlot</c> guard branches
+/// (entry pointer below image base; entry offset beyond image end).
+/// </summary>
+public sealed class StringPoolDecoderEdgeCaseTests
+{
+    private const long OffMsNKeySize = 0xB98840 - 0x400000;
+    private const long OffMsNSize = 0xB98844 - 0x400000;
+    private const long OffMsAKey = 0xB98830 - 0x400000;
+    private const long OffMsAString = 0xC5A878 - 0x400000;
+    private const int StubSlotCount = 100;
+
+    private static readonly byte[] TestMasterKey =
+    [
+        0x6C,
+        0xEB,
+        0xBC,
+        0x5E,
+        0x4B,
+        0xCC,
+        0x47,
+        0x5D,
+        0x3E,
+        0x3B,
+        0xC2,
+        0x90,
+        0x82,
+        0xDA,
+        0x69,
+        0x83,
+    ];
+
+    private static StubPeImageReader BuildMinimalStub()
+    {
+        var reader = new StubPeImageReader();
+        reader.WriteUInt32At(OffMsNKeySize, (uint)TestMasterKey.Length);
+        reader.WriteUInt32At(OffMsNSize, (uint)StubSlotCount);
+        reader.WriteAt(OffMsAKey, TestMasterKey);
+        // pointer table left all-zero → every slot has null-pointer VA
+        return reader;
+    }
+
+    // ── FileOffset — address below image base ─────────────────────────────────
+
+    [Test]
+    public async Task Constructor_MsNKeySizeAddressBelowImageBase_ThrowsInvalidDataException()
+    {
+        // ImageBase = 0x400000; MsNKeySize = 0x1 (< ImageBase) → FileOffset throws.
+        var addresses = new StringPoolAddresses
+        {
+            ImageBase = 0x400000u,
+            MsNKeySize = 0x000001u,
+            MsNSize = KnownLayouts.GmsV95.MsNSize,
+            MsAKey = KnownLayouts.GmsV95.MsAKey,
+            MsAString = KnownLayouts.GmsV95.MsAString,
+        };
+
+        await Assert
+            .That(() => new StringPoolDecoder(new StubPeImageReader(), addresses))
+            .Throws<InvalidDataException>();
+    }
+
+    // ── FileOffset — offset beyond image end ──────────────────────────────────
+
+    [Test]
+    public async Task Constructor_MsNKeySizeAddressBeyondImage_ThrowsInvalidDataException()
+    {
+        // StubPeImageReader is 0x900000 bytes; offset = 0xD00001 - 0x400000 = 0x900001 ≥ length.
+        var addresses = new StringPoolAddresses
+        {
+            ImageBase = 0x400000u,
+            MsNKeySize = 0xD00001u,
+            MsNSize = KnownLayouts.GmsV95.MsNSize,
+            MsAKey = KnownLayouts.GmsV95.MsAKey,
+            MsAString = KnownLayouts.GmsV95.MsAString,
+        };
+
+        await Assert
+            .That(() => new StringPoolDecoder(new StubPeImageReader(), addresses))
+            .Throws<InvalidDataException>();
+    }
+
+    // ── DecodeSlot — entry pointer below image base ───────────────────────────
+
+    [Test]
+    public async Task GetString_EntryPointerBelowImageBase_ReturnsEmptyString()
+    {
+        StubPeImageReader reader = BuildMinimalStub();
+
+        // Write a VA below image base (0x400000) into slot 1's pointer table entry.
+        // The pointer table is pre-read at construction, so this must be set before new().
+        reader.WriteUInt32At(OffMsAString + 1 * TypeSizes.Pointer, 0x100000u);
+
+        using StringPoolDecoder pool = new(reader);
+
+        await Assert.That(pool.GetString(1)).IsEqualTo(string.Empty);
+    }
+
+    // ── DecodeSlot — entry offset beyond image end ────────────────────────────
+
+    [Test]
+    public async Task GetString_EntryOffsetBeyondImage_ReturnsEmptyString()
+    {
+        StubPeImageReader reader = BuildMinimalStub();
+
+        // VA 0xD00001 → offset 0x900001 ≥ StubPeImageReader buffer (0x900000 bytes).
+        reader.WriteUInt32At(OffMsAString + 2 * TypeSizes.Pointer, 0xD00001u);
+
+        using StringPoolDecoder pool = new(reader);
+
+        await Assert.That(pool.GetString(2)).IsEqualTo(string.Empty);
+    }
+
+    // ── Dispose — double dispose ──────────────────────────────────────────────
+
+    [Test]
+    public async Task Dispose_CalledTwice_DoesNotThrow()
+    {
+        StringPoolDecoder pool = new(BuildMinimalStub());
+        pool.Dispose();
+        pool.Dispose(); // Interlocked.Exchange sees 1 → returns immediately
+
+        // If no exception reaches here the test passes.
+        await Assert.That(pool.GetType()).IsNotNull();
+    }
+
+    // ── Properties — throw after dispose ─────────────────────────────────────
+
+    [Test]
+    public async Task Count_AfterDispose_ThrowsObjectDisposedException()
+    {
+        StringPoolDecoder pool = new(BuildMinimalStub());
+        pool.Dispose();
+
+        await Assert.That(() => _ = pool.Count).Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task KeySize_AfterDispose_ThrowsObjectDisposedException()
+    {
+        StringPoolDecoder pool = new(BuildMinimalStub());
+        pool.Dispose();
+
+        await Assert.That(() => _ = pool.KeySize).Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task MasterKey_AfterDispose_ThrowsObjectDisposedException()
+    {
+        StringPoolDecoder pool = new(BuildMinimalStub());
+        pool.Dispose();
+
+        await Assert.That(() => _ = pool.MasterKey.Length).Throws<ObjectDisposedException>();
+    }
+
+    // ── GetRange — start equals end ───────────────────────────────────────────
+
+    [Test]
+    public async Task GetRange_StartEqualsEnd_ReturnsEmptySequence()
+    {
+        using StringPoolDecoder pool = new(BuildMinimalStub());
+
+        StringPoolEntry[] entries = pool.GetRange(5, 5).ToArray();
+
+        await Assert.That(entries.Length).IsEqualTo(0);
     }
 }

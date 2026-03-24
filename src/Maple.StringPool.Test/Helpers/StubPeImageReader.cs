@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using Maple.StringPool.Source;
 
 namespace Maple.StringPool.Test.Helpers;

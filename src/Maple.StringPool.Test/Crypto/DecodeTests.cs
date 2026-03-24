@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Maple.StringPool.Crypto;
 
 namespace Maple.StringPool.Test.Crypto;

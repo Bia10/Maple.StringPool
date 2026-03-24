@@ -1,4 +1,4 @@
-using Maple.StringPool.Crypto;
+﻿using Maple.StringPool.Crypto;
 
 namespace Maple.StringPool.Test.Crypto;
 
@@ -104,5 +104,34 @@ public sealed class RotateLeftInPlaceTests
         StringPoolCrypto.RotateLeftInPlace(key, 9);
 
         await Assert.That(Convert.ToHexString(key)).IsEqualTo("7755");
+    }
+
+    // ── Single-element key — bit rotation carry is zero ────────────────────────
+
+    [Test]
+    public async Task SingleElement_BitRotation_CarryWrapsToZero()
+    {
+        // key = [0x82], shift = 1:
+        //   Pass 1: shift < 8, no element rotation.
+        //   Pass 2: bitCount = 1.
+        //     length == 1 → wrappedHighBits = 0  (the length > 1 == false branch).
+        //     highBitsFromNext (i=0, i < 0 == false) = 0.
+        //     key[0] = (0x82 << 1) | 0 = 0x04.
+        //     key[^1] |= 0  (no change).
+        byte[] key = [0x82];
+        StringPoolCrypto.RotateLeftInPlace(key, 1);
+
+        await Assert.That(key[0]).IsEqualTo((byte)0x04);
+    }
+
+    [Test]
+    public async Task SingleElement_Shift8_RotatesZeroElements_BitRotationZero()
+    {
+        // shift = 8: elementPositions = (uint)(8 >> 3) % 1 = 1 % 1 = 0 → no element rotation.
+        // bitCount = 8 & 7 = 0 → no bit rotation. Key unchanged.
+        byte[] key = [0x42];
+        StringPoolCrypto.RotateLeftInPlace(key, 8);
+
+        await Assert.That(key[0]).IsEqualTo((byte)0x42);
     }
 }
