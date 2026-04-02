@@ -4,7 +4,7 @@ All notable changes to this project are documented in [GitHub Releases](https://
 
 This project uses [MinVer](https://github.com/adamralph/minver) for semantic versioning based on git tags.
 
-## [0.1.0] - 2026-04-02
+## [0.2.0] - 2026-04-02
 
 ### Added
 
