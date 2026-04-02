@@ -21,8 +21,15 @@ public sealed class DecodeTests
     {
         RotatedKey key = new(masterKey, seed);
         Span<byte> plain = stackalloc byte[encBody.Length];
-        StringPoolCrypto.Decode(encBody, ref key, plain);
+        StringPoolCrypto.Decode(encBody, in key, plain);
         return Encoding.Latin1.GetString(plain);
+    }
+
+    private static void DecodeWithMismatchedBuffers()
+    {
+        RotatedKey key = new([0x4A], seed: 0);
+        Span<byte> plain = stackalloc byte[2];
+        StringPoolCrypto.Decode([0x10], in key, plain);
     }
 
     private static byte[] KeyBytes(params byte[] bytes) => bytes;
@@ -95,5 +102,11 @@ public sealed class DecodeTests
         string result = DecodeWithKey([], KeyBytes(0x4A));
 
         await Assert.That(result).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task Decode_WhenBufferLengthsDiffer_ThrowsArgumentException()
+    {
+        await Assert.That(DecodeWithMismatchedBuffers).Throws<ArgumentException>();
     }
 }

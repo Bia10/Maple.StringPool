@@ -1,6 +1,7 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Maple.Native;
 using Maple.StringPool.Crypto;
 using Maple.StringPool.NativeTypes;
 using Maple.StringPool.Source;
@@ -53,12 +54,12 @@ public sealed class StringPoolDecoder : IDisposable
     // Lock (m_lock / ZFatalSection) is replaced by CAS below.
 
     // Static .data members (see StringPoolAddresses).
-    private readonly byte[] _masterKey; // ms_aKey
+    private readonly int _masterKeyOffset; // ms_aKey
     private readonly int _keySize; // ms_nKeySize
     private readonly int _slotCount; // ms_nSize
 
-    // ms_aString pointer table, pre-read at construction.
-    private readonly uint[] _pointerTable;
+    // ms_aString pointer table in the mapped image.
+    private readonly int _pointerTableOffset;
 
     private readonly StringPoolAddresses _addresses;
     private readonly IPeImageReader _reader; // held for Dispose()
@@ -96,10 +97,8 @@ public sealed class StringPoolDecoder : IDisposable
                     + "Verify the binary matches the supplied StringPoolAddresses."
             );
 
-        _masterKey = ZArray.ReadByteElements(img, FileOffset(_addresses.MsAKey), _keySize);
-
-        // Pre-read the entire ms_aString pointer table — const char*[N] in .data.
-        _pointerTable = ZArray.ReadPointerElements(img, FileOffset(_addresses.MsAString), _slotCount);
+        _masterKeyOffset = FileOffset(_addresses.MsAKey, _keySize);
+        _pointerTableOffset = FileOffset(_addresses.MsAString, checked(_slotCount * TypeSizes.Pointer));
 
         // Allocate narrow cache to ms_nSize slots; C# arrays are zero-initialized.
         _narrowCache = new string?[_slotCount];
@@ -154,6 +153,28 @@ public sealed class StringPoolDecoder : IDisposable
         }
     }
 
+    /// <summary>Wraps a pre-loaded PE image memory region without copying.</summary>
+    /// <param name="peImage">Read-only memory containing the full PE image.</param>
+    /// <param name="addresses">
+    /// Static .data addresses for the binary version.
+    /// Defaults to <see cref="KnownLayouts.GmsV95"/> when <see langword="null"/>.
+    /// </param>
+    /// <returns>A fully initialised <see cref="StringPoolDecoder"/> backed directly by <paramref name="peImage"/>.</returns>
+    /// <exception cref="InvalidDataException">The binary metadata is inconsistent with <paramref name="addresses"/>.</exception>
+    public static StringPoolDecoder FromMemory(ReadOnlyMemory<byte> peImage, StringPoolAddresses? addresses = null)
+    {
+        var reader = MemoryPeImageReader.FromMemory(peImage);
+        try
+        {
+            return new StringPoolDecoder(reader, addresses);
+        }
+        catch
+        {
+            reader.Dispose();
+            throw;
+        }
+    }
+
     // ── Properties (expose static member values) ──────────────────────────────
 
     /// <summary>
@@ -194,7 +215,7 @@ public sealed class StringPoolDecoder : IDisposable
         get
         {
             ThrowIfDisposed();
-            return _masterKey;
+            return _image.Span.Slice(_masterKeyOffset, _keySize);
         }
     }
 
@@ -244,13 +265,13 @@ public sealed class StringPoolDecoder : IDisposable
 
     // ── Enumeration ───────────────────────────────────────────────────────────
 
-    /// <summary>Enumerates all entries in ascending index order.</summary>
-    /// <returns>A deferred sequence of all <see cref="StringPoolEntry"/> values, index 0 to <see cref="Count"/> − 1.</returns>
+    /// <summary>Returns a stable snapshot of all entries in ascending index order.</summary>
+    /// <returns>A snapshot of all <see cref="StringPoolEntry"/> values, index 0 to <see cref="Count"/> − 1.</returns>
     /// <exception cref="ObjectDisposedException">The decoder has been disposed.</exception>
     public IEnumerable<StringPoolEntry> GetAll()
     {
         ThrowIfDisposed();
-        return GetRangeCore(0, (uint)_slotCount);
+        return GetRangeSnapshot(0, (uint)_slotCount);
     }
 
     /// <summary>
@@ -261,7 +282,7 @@ public sealed class StringPoolDecoder : IDisposable
     /// Exclusive upper bound. Silently clamped to <see cref="Count"/> when it exceeds
     /// the total slot count; pass <see cref="uint.MaxValue"/> to mean "to the last slot".
     /// </param>
-    /// <returns>A deferred sequence of entries whose index satisfies <c>start ≤ index &lt; end</c>.</returns>
+    /// <returns>A stable snapshot of entries whose index satisfies <c>start ≤ index &lt; end</c>.</returns>
     /// <remarks>
     /// If <paramref name="start"/> is at or beyond the slot count after clamping
     /// is applied, an empty sequence is returned without throwing.
@@ -273,14 +294,68 @@ public sealed class StringPoolDecoder : IDisposable
         ThrowIfDisposed();
         if (start > end)
             throw new ArgumentException($"start ({start}) must be <= end ({end}).", nameof(start));
-        return GetRangeCore(start, end);
+        return GetRangeSnapshot(start, end);
     }
 
-    private IEnumerable<StringPoolEntry> GetRangeCore(uint start, uint end)
+    /// <summary>
+    /// Enumerates all entries without first materialising a snapshot array.
+    /// </summary>
+    /// <returns>A live view of all <see cref="StringPoolEntry"/> values in ascending index order.</returns>
+    /// <remarks>
+    /// This path avoids the snapshot array allocated by <see cref="GetAll"/>, but the
+    /// decoder must remain undisposed for the full enumeration.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed.</exception>
+    public IEnumerable<StringPoolEntry> EnumerateAll()
+    {
+        ThrowIfDisposed();
+        return EnumerateRangeIterator(this, 0, (uint)_slotCount);
+    }
+
+    /// <summary>
+    /// Enumerates entries in [<paramref name="start"/>, <paramref name="end"/>) without
+    /// first materialising a snapshot array.
+    /// </summary>
+    /// <param name="start">Inclusive lower bound (zero-based slot index).</param>
+    /// <param name="end">
+    /// Exclusive upper bound. Silently clamped to <see cref="Count"/> when it exceeds
+    /// the total slot count; pass <see cref="uint.MaxValue"/> to mean "to the last slot".
+    /// </param>
+    /// <returns>A live view of entries whose index satisfies <c>start ≤ index &lt; end</c>.</returns>
+    /// <remarks>
+    /// This path avoids the snapshot array allocated by <see cref="GetRange"/>, but the
+    /// decoder must remain undisposed for the full enumeration.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed.</exception>
+    /// <exception cref="ArgumentException"><paramref name="start"/> is greater than <paramref name="end"/>.</exception>
+    public IEnumerable<StringPoolEntry> EnumerateRange(uint start, uint end)
+    {
+        ThrowIfDisposed();
+        if (start > end)
+            throw new ArgumentException($"start ({start}) must be <= end ({end}).", nameof(start));
+        return EnumerateRangeIterator(this, start, end);
+    }
+
+    private StringPoolEntry[] GetRangeSnapshot(uint start, uint end)
     {
         uint clampedEnd = Math.Min(end, (uint)_slotCount);
+        if (start >= clampedEnd)
+            return [];
+
+        var entries = new StringPoolEntry[checked((int)(clampedEnd - start))];
         for (uint i = start; i < clampedEnd; i++)
-            yield return new StringPoolEntry(i, GetString(i));
+            entries[i - start] = new StringPoolEntry(i, GetString(i));
+
+        return entries;
+    }
+
+    private static IEnumerable<StringPoolEntry> EnumerateRangeIterator(StringPoolDecoder decoder, uint start, uint end)
+    {
+        decoder.ThrowIfDisposed();
+
+        uint clampedEnd = Math.Min(end, (uint)decoder._slotCount);
+        for (uint i = start; i < clampedEnd; i++)
+            yield return new StringPoolEntry(i, decoder.GetString(i));
     }
 
     /// <summary>
@@ -288,7 +363,7 @@ public sealed class StringPoolDecoder : IDisposable
     /// </summary>
     /// <param name="term">The substring to search for.</param>
     /// <param name="comparison">String comparison mode. Defaults to <see cref="StringComparison.OrdinalIgnoreCase"/>.</param>
-    /// <returns>Entries whose <see cref="StringPoolEntry.Value"/> contains <paramref name="term"/>.</returns>
+    /// <returns>A stable snapshot of entries whose <see cref="StringPoolEntry.Value"/> contains <paramref name="term"/>.</returns>
     /// <exception cref="ObjectDisposedException">The decoder has been disposed.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="term"/> is <see langword="null"/>.</exception>
     public IEnumerable<StringPoolEntry> Find(
@@ -298,14 +373,58 @@ public sealed class StringPoolDecoder : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(term);
-        return FindCore(term, comparison);
+        return FindSnapshot(term, comparison);
     }
 
-    private IEnumerable<StringPoolEntry> FindCore(string term, StringComparison comparison)
+    /// <summary>
+    /// Searches all entries for <paramref name="term"/> without first materialising a snapshot.
+    /// </summary>
+    /// <param name="term">The substring to search for.</param>
+    /// <param name="comparison">String comparison mode. Defaults to <see cref="StringComparison.OrdinalIgnoreCase"/>.</param>
+    /// <returns>A live view of entries whose <see cref="StringPoolEntry.Value"/> contains <paramref name="term"/>.</returns>
+    /// <remarks>
+    /// This path avoids the snapshot allocations made by <see cref="Find"/>, but the decoder
+    /// must remain undisposed for the full enumeration.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="term"/> is <see langword="null"/>.</exception>
+    public IEnumerable<StringPoolEntry> EnumerateFind(
+        string term,
+        StringComparison comparison = StringComparison.OrdinalIgnoreCase
+    )
     {
-        foreach (StringPoolEntry entry in GetAll())
-            if (entry.Value.Contains(term, comparison))
-                yield return entry;
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(term);
+        return EnumerateFindIterator(this, term, comparison);
+    }
+
+    private List<StringPoolEntry> FindSnapshot(string term, StringComparison comparison)
+    {
+        List<StringPoolEntry> matches = [];
+        for (uint i = 0; i < (uint)_slotCount; i++)
+        {
+            string value = GetString(i);
+            if (value.Contains(term, comparison))
+                matches.Add(new StringPoolEntry(i, value));
+        }
+
+        return matches;
+    }
+
+    private static IEnumerable<StringPoolEntry> EnumerateFindIterator(
+        StringPoolDecoder decoder,
+        string term,
+        StringComparison comparison
+    )
+    {
+        decoder.ThrowIfDisposed();
+
+        for (uint i = 0; i < (uint)decoder._slotCount; i++)
+        {
+            string value = decoder.GetString(i);
+            if (value.Contains(term, comparison))
+                yield return new StringPoolEntry(i, value);
+        }
     }
 
     // ── Decode pipeline ───────────────────────────────────────────────────────
@@ -344,8 +463,8 @@ public sealed class StringPoolDecoder : IDisposable
     {
         ReadOnlySpan<byte> img = _image.Span;
 
-        // Step 1: Index the ms_aString pointer table.
-        uint entryPointer = _pointerTable[index];
+        // Step 1: Index the ms_aString pointer table directly in the image.
+        uint entryPointer = ReadPointerTableEntry(index);
 
         // Null or out-of-range pointers → empty string (mirrors runtime null-guard).
         if (entryPointer < _addresses.ImageBase)
@@ -367,11 +486,11 @@ public sealed class StringPoolDecoder : IDisposable
             return string.Empty;
 
         // Step 3: Construct a RotatedKey on the stack — InlineArray, zero heap alloc.
-        RotatedKey rotatedKey = new(_masterKey, seed);
+        RotatedKey rotatedKey = new(img.Slice(_masterKeyOffset, _keySize), seed);
 
         // Step 4: Decrypt into a plain-text stackalloc buffer.
         Span<byte> plainBuffer = stackalloc byte[encryptedLength];
-        StringPoolCrypto.Decode(bodySpan[..encryptedLength], ref rotatedKey, plainBuffer);
+        StringPoolCrypto.Decode(bodySpan[..encryptedLength], in rotatedKey, plainBuffer);
 
         return Encoding.Latin1.GetString(plainBuffer);
     }
@@ -400,6 +519,29 @@ public sealed class StringPoolDecoder : IDisposable
             );
 
         return offset;
+    }
+
+    private int FileOffset(uint memoryAddress, int readableBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(readableBytes);
+
+        int offset = FileOffset(memoryAddress);
+        if (offset > _image.Length - readableBytes)
+        {
+            throw new InvalidDataException(
+                $"Address 0x{memoryAddress:X} (offset 0x{offset:X}) with length 0x{readableBytes:X} exceeds the end of the image (size 0x{_image.Length:X}). "
+                    + "Verify the binary matches the supplied StringPoolAddresses."
+            );
+        }
+
+        return offset;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private uint ReadPointerTableEntry(uint index)
+    {
+        int pointerOffset = _pointerTableOffset + checked((int)index * TypeSizes.Pointer);
+        return BinaryPrimitives.ReadUInt32LittleEndian(_image.Span[pointerOffset..]);
     }
 
     [System.Diagnostics.StackTraceHidden]

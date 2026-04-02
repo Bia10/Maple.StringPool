@@ -37,11 +37,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Maple.Native" />
+    <PackageReference Include="Maple.Client.V95" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Maple.Client.V95" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>Maple.StringPool.Test</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>Maple.StringPool.XyzTest</_Parameter1>
+      <_Parameter1>Maple.StringPool.DocTest</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>Maple.StringPool.Benchmarks</_Parameter1>

@@ -1,6 +1,5 @@
 ﻿using System.Text;
 using System.Text.Json;
-using Maple.StringPool;
 
 namespace Maple.StringPool.Cli;
 
@@ -131,11 +130,7 @@ internal static class Program
 
         ParseOutputOptions(args[2..], out string format, out string? outPath, out string? filter);
 
-        IEnumerable<StringPoolEntry> entries = pool.GetRange(start, end);
-        if (filter is not null)
-            entries = entries.Where(e => e.Value.Contains(filter, StringComparison.OrdinalIgnoreCase));
-
-        WriteResults(entries, format, outPath);
+        int _ = WriteResults(pool.EnumerateRange(start, end), format, outPath, filter);
         return 0;
     }
 
@@ -152,8 +147,7 @@ internal static class Program
         string term = string.Join(' ', optStart < 0 ? args : args[..optStart]);
         ParseOutputOptions(optStart < 0 ? [] : args[optStart..], out string format, out string? outPath, out _);
 
-        IEnumerable<StringPoolEntry> hits = pool.Find(term);
-        int written = WriteResults(hits, format, outPath);
+        int written = WriteResults(pool.EnumerateFind(term), format, outPath);
         if (written == 0)
             Console.Error.WriteLine($"[info] no matches for '{term}'");
         return 0;
@@ -163,11 +157,7 @@ internal static class Program
     {
         ParseOutputOptions(args, out string format, out string? outPath, out string? filter);
 
-        IEnumerable<StringPoolEntry> entries = pool.GetAll();
-        if (filter is not null)
-            entries = entries.Where(e => e.Value.Contains(filter, StringComparison.OrdinalIgnoreCase));
-
-        WriteResults(entries, format, outPath);
+        int _ = WriteResults(pool.EnumerateAll(), format, outPath, filter);
         return 0;
     }
 
@@ -181,7 +171,12 @@ internal static class Program
 
     // ── Output ────────────────────────────────────────────────────────────────
 
-    private static int WriteResults(IEnumerable<StringPoolEntry> entries, string format, string? outPath)
+    private static int WriteResults(
+        IEnumerable<StringPoolEntry> entries,
+        string format,
+        string? outPath,
+        string? filter = null
+    )
     {
         // Reuse Console.Out directly (already buffered) — only allocate a StreamWriter for file output.
         bool ownsWriter = outPath is not null;
@@ -202,6 +197,9 @@ internal static class Program
                     jw.WriteStartObject();
                     foreach (StringPoolEntry entry in entries)
                     {
+                        if (!ShouldWrite(entry, filter))
+                            continue;
+
                         jw.WritePropertyName(((int)entry.Index).ToString());
                         jw.WriteStringValue(entry.Value);
                         count++;
@@ -215,6 +213,9 @@ internal static class Program
                     output.WriteLine("Index,Key,Value");
                     foreach (StringPoolEntry entry in entries)
                     {
+                        if (!ShouldWrite(entry, filter))
+                            continue;
+
                         output.Write($"{entry.Index},SP[0x{entry.Index:X}],\"");
                         WriteCsvEscaped(output, entry.Value);
                         output.WriteLine('"');
@@ -232,6 +233,9 @@ internal static class Program
 
                     foreach (StringPoolEntry entry in entries)
                     {
+                        if (!ShouldWrite(entry, filter))
+                            continue;
+
                         output.Write($"SP[0x{entry.Index:X}] ({entry.Index}): ");
                         WriteTextEscaped(output, entry.Value);
                         output.WriteLine();
@@ -250,6 +254,9 @@ internal static class Program
 
         return count;
     }
+
+    private static bool ShouldWrite(StringPoolEntry entry, string? filter) =>
+        filter is null || entry.Value.Contains(filter, StringComparison.OrdinalIgnoreCase);
 
     // ── Option parsing ────────────────────────────────────────────────────────
 

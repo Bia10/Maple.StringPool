@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Maple.StringPool.Crypto;
@@ -24,6 +24,9 @@ internal ref struct RotatedKey
     /// </param>
     internal RotatedKey(ReadOnlySpan<byte> masterKey, int seed)
     {
+        if (masterKey.IsEmpty)
+            throw new ArgumentOutOfRangeException(nameof(masterKey), "Master key length must be greater than zero.");
+
         // Lower bound (> 0) is guaranteed by StringPoolDecoder's _keySize > 0 validation.
         // Upper bound enforced here because KeyBuffer is fixed at 256 bytes.
         if (masterKey.Length > 256)

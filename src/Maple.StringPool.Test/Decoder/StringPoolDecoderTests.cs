@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Maple.StringPool.NativeTypes;
+﻿using Maple.Native;
 using Maple.StringPool.Test.Helpers;
 
 namespace Maple.StringPool.Test.Decoder;
@@ -96,7 +95,7 @@ public sealed class StringPoolDecoderTests
 
         // 1. Bootstrap metadata (mirrors StringPool::StringPool() at 0x7465D0).
         reader.WriteUInt32At(OffMsNKeySize, (uint)TestMasterKey.Length);
-        reader.WriteUInt32At(OffMsNSize, (uint)StubSlotCount);
+        reader.WriteUInt32At(OffMsNSize, StubSlotCount);
         reader.WriteAt(OffMsAKey, TestMasterKey);
 
         // 2. Place each encoded entry and write its VA into the pointer table.
@@ -225,7 +224,7 @@ public sealed class StringPoolDecoderTests
         await Assert
             .That(() =>
             {
-                _ = pool.GetString((uint)StubSlotCount);
+                _ = pool.GetString(StubSlotCount);
             })
             .Throws<ArgumentOutOfRangeException>();
     }
@@ -252,6 +251,32 @@ public sealed class StringPoolDecoderTests
         using StringPoolDecoder pool = new(BuildStubImage());
 
         StringPoolEntry[] hits = pool.Find("warrior").ToArray();
+
+        await Assert.That(hits.Length).IsGreaterThan(0);
+        await Assert.That(hits[0].Index).IsEqualTo(13u);
+        await Assert.That(hits[0].Value).IsEqualTo("Warrior");
+    }
+
+    [Test]
+    public async Task EnumerateAll_ContainsAllKnownEntries()
+    {
+        using StringPoolDecoder pool = new(BuildStubImage());
+
+        StringPoolEntry[] all = pool.EnumerateAll().ToArray();
+
+        foreach ((uint slot, string plain, _) in KnownEntries)
+        {
+            StringPoolEntry entry = all.Single(e => e.Index == slot);
+            await Assert.That(entry.Value).IsEqualTo(plain);
+        }
+    }
+
+    [Test]
+    public async Task EnumerateFind_ByJobName_ReturnsMatchingEntry()
+    {
+        using StringPoolDecoder pool = new(BuildStubImage());
+
+        StringPoolEntry[] hits = pool.EnumerateFind("warrior").ToArray();
 
         await Assert.That(hits.Length).IsGreaterThan(0);
         await Assert.That(hits[0].Index).IsEqualTo(13u);
@@ -471,6 +496,70 @@ public sealed class StringPoolDecoderTests
             .Throws<ObjectDisposedException>();
     }
 
+    [Test]
+    public async Task Dispose_ThenEnumerateAll_ThrowsEagerly()
+    {
+        StringPoolDecoder pool = new(BuildStubImage());
+        pool.Dispose();
+
+        await Assert
+            .That(() =>
+            {
+                _ = pool.EnumerateAll();
+            })
+            .Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task GetRange_AfterSequenceIsCreated_RemainsUsableAfterDispose()
+    {
+        StringPoolDecoder pool = new(BuildStubImage());
+        IEnumerable<StringPoolEntry> range = pool.GetRange(8, 14);
+
+        pool.Dispose();
+
+        StringPoolEntry[] entries = range.ToArray();
+
+        await Assert.That(entries.Select(entry => entry.Index).ToArray()).IsEquivalentTo([8u, 9u, 10u, 11u, 12u, 13u]);
+    }
+
+    [Test]
+    public async Task Find_AfterSequenceIsCreated_RemainsUsableAfterDispose()
+    {
+        StringPoolDecoder pool = new(BuildStubImage());
+        IEnumerable<StringPoolEntry> hits = pool.Find("warrior");
+
+        pool.Dispose();
+
+        StringPoolEntry[] entries = hits.ToArray();
+
+        await Assert.That(entries.Length).IsEqualTo(1);
+        await Assert.That(entries[0].Index).IsEqualTo(13u);
+        await Assert.That(entries[0].Value).IsEqualTo("Warrior");
+    }
+
+    [Test]
+    public async Task EnumerateRange_AfterSequenceIsCreated_ThrowsAfterDispose()
+    {
+        StringPoolDecoder pool = new(BuildStubImage());
+        IEnumerable<StringPoolEntry> range = pool.EnumerateRange(8, 14);
+
+        pool.Dispose();
+
+        await Assert.That(() => range.ToArray()).Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task EnumerateFind_AfterSequenceIsCreated_ThrowsAfterDispose()
+    {
+        StringPoolDecoder pool = new(BuildStubImage());
+        IEnumerable<StringPoolEntry> hits = pool.EnumerateFind("warrior");
+
+        pool.Dispose();
+
+        await Assert.That(() => hits.ToArray()).Throws<ObjectDisposedException>();
+    }
+
     // ── GetRange end-clamping ─────────────────────────────────────────────────
 
     [Test]
@@ -569,7 +658,7 @@ public sealed class StringPoolDecoderFactoryTests
     {
         var reader = new StubPeImageReader();
         reader.WriteUInt32At(OffMsNKeySize, (uint)TestMasterKey.Length);
-        reader.WriteUInt32At(OffMsNSize, (uint)StubSlotCount);
+        reader.WriteUInt32At(OffMsNSize, StubSlotCount);
         reader.WriteAt(OffMsAKey, TestMasterKey);
 
         long entryOffset = EntryBlobBase + (8 * 0x100);
@@ -666,6 +755,17 @@ public sealed class StringPoolDecoderFactoryTests
         await Assert.That(pool.GetString(8)).IsEqualTo("Tahoma");
         await Assert.That(pool.Count).IsEqualTo(StubSlotCount);
     }
+
+    [Test]
+    public async Task FromMemory_ValidImage_DecodesExpectedSlot()
+    {
+        ReadOnlyMemory<byte> image = BuildStubImage().Image;
+
+        using StringPoolDecoder pool = StringPoolDecoder.FromMemory(image);
+
+        await Assert.That(pool.GetString(8)).IsEqualTo("Tahoma");
+        await Assert.That(pool.Count).IsEqualTo(StubSlotCount);
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -708,7 +808,7 @@ public sealed class StringPoolDecoderEdgeCaseTests
     {
         var reader = new StubPeImageReader();
         reader.WriteUInt32At(OffMsNKeySize, (uint)TestMasterKey.Length);
-        reader.WriteUInt32At(OffMsNSize, (uint)StubSlotCount);
+        reader.WriteUInt32At(OffMsNSize, StubSlotCount);
         reader.WriteAt(OffMsAKey, TestMasterKey);
         // pointer table left all-zero → every slot has null-pointer VA
         return reader;

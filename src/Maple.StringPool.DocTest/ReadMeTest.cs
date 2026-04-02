@@ -1,25 +1,25 @@
-#pragma warning disable CA2007 // ConfigureAwait
+﻿#pragma warning disable CA2007 // ConfigureAwait
 #pragma warning disable CA1822 // Mark as static
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using PublicApiGenerator;
 
-namespace Maple.StringPool.XyzTest;
+namespace Maple.StringPool.DocTest;
 
 [NotInParallel]
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public partial class ReadMeTest
 {
+    const string UpdateReadMeEnvironmentVariable = "MAPLE_UPDATE_README";
+
     static readonly string s_testSourceFilePath = SourceFile();
     static readonly string s_rootDirectory =
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(s_testSourceFilePath)!, "..", ".."))
         + Path.DirectorySeparatorChar;
     static readonly string s_readmeFilePath = s_rootDirectory + "README.md";
+    static readonly string s_publicApiFilePath =
+        s_rootDirectory + "docs" + Path.DirectorySeparatorChar + "PublicApi.md";
 
     [Test]
     public void ReadMeTest_()
@@ -53,6 +53,11 @@ public partial class ReadMeTest
 #endif
     public void ReadMeTest_UpdateExampleCodeInMarkdown()
     {
+        if (!ShouldUpdateReadMe())
+        {
+            return;
+        }
+
         if (!File.Exists(s_readmeFilePath))
         {
             return;
@@ -86,6 +91,11 @@ public partial class ReadMeTest
 #endif
     public void ReadMeTest_UpdateBenchmarksInMarkdown()
     {
+        if (!ShouldUpdateReadMe())
+        {
+            return;
+        }
+
         if (!File.Exists(s_readmeFilePath))
         {
             return;
@@ -157,17 +167,42 @@ public partial class ReadMeTest
 #endif
     public void ReadMeTest_PublicApi()
     {
-        if (!File.Exists(s_readmeFilePath))
+        if (!ShouldUpdateReadMe())
+        {
+            return;
+        }
+
+        if (!File.Exists(s_publicApiFilePath))
         {
             return;
         }
 
         var publicApi = typeof(StringPoolDecoder).Assembly.GeneratePublicApi();
-        var readmeLines = File.ReadAllLines(s_readmeFilePath);
-        readmeLines = ReplaceReadmeLines(readmeLines, [publicApi], "## Public API Reference", "```csharp", 1, "```", 0);
-        var newReadme = string.Join(Environment.NewLine, readmeLines) + Environment.NewLine;
-        File.WriteAllText(s_readmeFilePath, newReadme, System.Text.Encoding.UTF8);
+        var publicApiLines = File.ReadAllLines(s_publicApiFilePath);
+        publicApiLines = ReplaceReadmeLines(
+            publicApiLines,
+            [publicApi],
+            "# Public API Reference",
+            "```csharp",
+            1,
+            "```",
+            0
+        );
+        var newPublicApi = string.Join(Environment.NewLine, publicApiLines) + Environment.NewLine;
+        File.WriteAllText(s_publicApiFilePath, newPublicApi, System.Text.Encoding.UTF8);
     }
+
+    static bool ShouldUpdateReadMe() =>
+        string.Equals(
+            Environment.GetEnvironmentVariable(UpdateReadMeEnvironmentVariable),
+            "1",
+            StringComparison.Ordinal
+        )
+        || string.Equals(
+            Environment.GetEnvironmentVariable(UpdateReadMeEnvironmentVariable),
+            "true",
+            StringComparison.OrdinalIgnoreCase
+        );
 
     static string[] UpdateReadme(
         string[] sourceLines,

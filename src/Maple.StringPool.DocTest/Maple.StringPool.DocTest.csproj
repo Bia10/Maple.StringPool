@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <RootNamespace>Maple.StringPool.XyzTest</RootNamespace>
+    <RootNamespace>Maple.StringPool.DocTest</RootNamespace>
     <IsPackable>false</IsPackable>
     <NoWarn>$(NoWarn);CA2007</NoWarn>
   </PropertyGroup>

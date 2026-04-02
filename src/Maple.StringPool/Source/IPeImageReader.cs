@@ -1,4 +1,4 @@
-namespace Maple.StringPool.Source;
+﻿namespace Maple.StringPool.Source;
 
 /// <summary>
 /// Read-only view over a flat PE image binary, used by <see cref="StringPoolDecoder"/>

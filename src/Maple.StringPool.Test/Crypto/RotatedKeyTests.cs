@@ -36,6 +36,12 @@ public sealed class RotatedKeyTests
         await Assert.That(() => CreateKey(maxKey, 0)).ThrowsNothing();
     }
 
+    [Test]
+    public async Task Constructor_EmptyMasterKey_ThrowsArgumentOutOfRangeException()
+    {
+        await Assert.That(() => CreateKey([], 0)).Throws<ArgumentOutOfRangeException>();
+    }
+
     // ── Indexer — key wrapping ——————————————————————————————————————————————
 
     // ReadOnlySpan<byte> params: call sites can pass compile-time span literals — zero heap.
@@ -48,7 +54,7 @@ public sealed class RotatedKeyTests
     {
         RotatedKey key = new(masterKey, seed);
         Span<byte> plain = stackalloc byte[encBody.Length];
-        StringPoolCrypto.Decode(encBody, ref key, plain);
+        StringPoolCrypto.Decode(encBody, in key, plain);
         return plain[outputIndex];
     }
 
@@ -85,7 +91,7 @@ public sealed class RotatedKeyTests
     {
         RotatedKey key = new(masterKey, seed);
         Span<byte> plain = stackalloc byte[encBody.Length];
-        StringPoolCrypto.Decode(encBody, ref key, plain);
+        StringPoolCrypto.Decode(encBody, in key, plain);
         return Encoding.Latin1.GetString(plain);
     }
 

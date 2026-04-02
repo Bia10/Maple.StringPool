@@ -1,4 +1,4 @@
-namespace Maple.StringPool.Source;
+﻿namespace Maple.StringPool.Source;
 
 /// <summary>
 /// <see cref="IPeImageReader"/> backed by the entire PE image loaded into
@@ -36,6 +36,9 @@ public sealed class MemoryPeImageReader : IPeImageReader
         ArgumentNullException.ThrowIfNull(image);
         return new(new ReadOnlyMemory<byte>(image));
     }
+
+    /// <summary>Wraps an already-loaded PE image memory region without copying.</summary>
+    public static MemoryPeImageReader FromMemory(ReadOnlyMemory<byte> image) => new(image);
 
     /// <inheritdoc/>
     public ReadOnlyMemory<byte> Image => _image;

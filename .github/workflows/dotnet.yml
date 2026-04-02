@@ -51,8 +51,8 @@ jobs:
       - name: Test (Maple.StringPool.Test)
         run: dotnet run --project src/Maple.StringPool.Test/Maple.StringPool.Test.csproj -c ${{ matrix.configuration }} --no-build -- --no-ansi
 
-      - name: Test (Maple.StringPool.XyzTest)
-        run: dotnet run --project src/Maple.StringPool.XyzTest/Maple.StringPool.XyzTest.csproj -c ${{ matrix.configuration }} --no-build -- --no-ansi
+      - name: Test (Maple.StringPool.DocTest)
+        run: dotnet run --project src/Maple.StringPool.DocTest/Maple.StringPool.DocTest.csproj -c ${{ matrix.configuration }} --no-build -- --no-ansi
 
   coverage:
     runs-on: ubuntu-latest
@@ -83,8 +83,8 @@ jobs:
       - name: Collect coverage (Maple.StringPool.Test)
         run: dotnet-coverage collect --output TestResults/coverage1.xml --output-format cobertura -- dotnet run --project src/Maple.StringPool.Test/Maple.StringPool.Test.csproj -c Release --no-build -- --no-ansi
 
-      - name: Collect coverage (Maple.StringPool.XyzTest)
-        run: dotnet-coverage collect --output TestResults/coverage2.xml --output-format cobertura -- dotnet run --project src/Maple.StringPool.XyzTest/Maple.StringPool.XyzTest.csproj -c Release --no-build -- --no-ansi
+      - name: Collect coverage (Maple.StringPool.DocTest)
+        run: dotnet-coverage collect --output TestResults/coverage2.xml --output-format cobertura -- dotnet run --project src/Maple.StringPool.DocTest/Maple.StringPool.DocTest.csproj -c Release --no-build -- --no-ansi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3

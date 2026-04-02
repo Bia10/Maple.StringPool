@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace Maple.StringPool.Crypto;
 
@@ -92,10 +92,13 @@ internal static class StringPoolCrypto
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void Decode(
         scoped ReadOnlySpan<byte> encryptedBody,
-        scoped ref RotatedKey key,
+        scoped in RotatedKey key,
         scoped Span<byte> plainBuffer
     )
     {
+        if (encryptedBody.Length != plainBuffer.Length)
+            throw new ArgumentException("Encrypted and plain buffers must be the same length.");
+
         int count = encryptedBody.Length;
         for (int i = 0; i < count; i++)
         {
@@ -103,6 +106,34 @@ internal static class StringPoolCrypto
             byte encrypted = encryptedBody[i];
             // Zero-collision: enc == key → preserve key byte (avoids false nulls); otherwise XOR.
             plainBuffer[i] = encrypted == keyByte ? keyByte : (byte)(encrypted ^ keyByte);
+        }
+    }
+
+    /// <summary>
+    /// Encrypts <paramref name="plainBody"/> into <paramref name="encryptedBuffer"/>
+    /// using the same zero-collision rule as the native client.
+    /// </summary>
+    /// <remarks>
+    /// When <c>plain[i] == keyByte</c>, the encrypted byte is also <c>keyByte</c>
+    /// rather than zero. This preserves the native invariant that the encoded body
+    /// contains no false embedded null terminators.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void Encode(
+        scoped ReadOnlySpan<byte> plainBody,
+        scoped in RotatedKey key,
+        scoped Span<byte> encryptedBuffer
+    )
+    {
+        if (plainBody.Length != encryptedBuffer.Length)
+            throw new ArgumentException("Plain and encrypted buffers must be the same length.");
+
+        int count = plainBody.Length;
+        for (int i = 0; i < count; i++)
+        {
+            byte keyByte = key[i];
+            byte plain = plainBody[i];
+            encryptedBuffer[i] = plain == keyByte ? keyByte : (byte)(plain ^ keyByte);
         }
     }
 }

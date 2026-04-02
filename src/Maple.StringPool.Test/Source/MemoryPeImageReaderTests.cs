@@ -61,6 +61,20 @@ public sealed class MemoryPeImageReaderTests
         await Assert.That(reader.Image.Span.SequenceEqual(data)).IsTrue();
     }
 
+    [Test]
+    public async Task FromMemory_ValidMemory_ImageMatchesInputWithoutCopy()
+    {
+        byte[] data = [0x01, 0x02, 0x03, 0x04];
+
+        using MemoryPeImageReader reader = MemoryPeImageReader.FromMemory(data);
+        data[2] = 0xFF;
+
+        await Assert.That(reader.Image.Span[0]).IsEqualTo((byte)0x01);
+        await Assert.That(reader.Image.Span[1]).IsEqualTo((byte)0x02);
+        await Assert.That(reader.Image.Span[2]).IsEqualTo((byte)0xFF);
+        await Assert.That(reader.Image.Span[3]).IsEqualTo((byte)0x04);
+    }
+
     // ── Image property ────────────────────────────────────────────────────────
 
     [Test]

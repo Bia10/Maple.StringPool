@@ -1,6 +1,6 @@
-using System.Globalization;
+﻿using System.Globalization;
 
-namespace Maple.StringPool.XyzTest;
+namespace Maple.StringPool.DocTest;
 
 public static class AssemblyInitializeCultureTest
 {

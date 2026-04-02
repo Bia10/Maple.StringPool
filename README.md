@@ -9,9 +9,90 @@
 
 Zero-allocation decoder for the MapleStory GMS v95 `StringPool` singleton. Cross-platform, trimmable and AOT/NativeAOT compatible.
 
+The library also includes allocator-backed mutation helpers for live runtime substitution scenarios where an injected tool needs to replace an existing StringPool slot or seed the live runtime caches with a new `ZXString`.
+
 ⭐ Please star this project if you like it. ⭐
 
-[Example](#example) | [Example Catalogue](#example-catalogue) | [CLI Tool (`sp`)](#cli-tool-sp) | [Public API Reference](#public-api-reference)
+[Example](#example) | [Example Catalogue](#example-catalogue) | [CLI Tool (`sp`)](#cli-tool-sp) | [Public API Reference](docs/PublicApi.md)
+
+## Runtime Mutation
+
+The original client does not expose a growable StringPool. In v95, `ms_aString` is a fixed `const char*[6883]` table in `.data`, and `ms_nSize` is fixed as well. That means adding a new string in practice means reusing an existing slot unless you also patch the client code that assumes the original table shape.
+
+For runtime tooling, the preferred operation is a synchronized whole-slot substitution:
+
+```csharp
+using Maple.Native;
+using Maple.StringPool;
+
+INativeRuntimeAllocator allocator = /* injected runtime allocator */;
+
+StringPoolRuntimeSubstitution substitution = StringPoolMutator.SubstituteSlot(
+    allocator,
+    KnownLayouts.GmsV95,
+    stringPoolAddress,
+    index: 25,
+    value: "Telemetry/Hero",
+    masterKey: masterKeyBytes,
+    seed: 0);
+```
+
+That path validates the live cache shape against `ms_nSize`, acquires `StringPool::m_lock`, and updates the static entry plus both runtime caches as one logical operation. It requires a runtime allocator that can participate in the target thread's lock ownership semantics; a raw out-of-process handle is not enough for this API by itself.
+
+For raw remote memory patching from an attached Windows tool, Maple.Native now also exposes a Windows-only remote-process backend:
+
+```csharp
+using Maple.Memory;
+using Maple.Native;
+using Maple.Process;
+using Maple.StringPool;
+
+using WindowsProcessMemory processMemory = WindowsProcessMemory.Open(processId);
+using RemoteProcessAllocator allocator = new(processMemory);
+
+uint entryAddress = StringPoolMutator.ReplaceStaticSlot(
+    allocator,
+    KnownLayouts.GmsV95,
+    index: 25,
+    value: "Telemetry/Hero",
+    masterKey: masterKeyBytes,
+    seed: 0);
+```
+
+That remote allocator is suitable for allocator-backed native object creation and raw pointer replacement. The synchronized `SubstituteSlot` path still needs an injected `INativeRuntimeAllocator` implementation.
+
+Lower-level operations still exist when you explicitly want raw pointer writes:
+
+```csharp
+using Maple.Native;
+using Maple.StringPool;
+
+INativeAllocator allocator = /* future remote allocator */;
+
+// Replace the encoded entry used by the static table.
+uint entryAddress = StringPoolMutator.ReplaceStaticSlot(
+    allocator,
+    KnownLayouts.GmsV95,
+    index: 25,
+    value: "Telemetry/Hero",
+    masterKey: masterKeyBytes,
+    seed: 0);
+
+// Or inject a ready-made runtime cache entry for immediate GetString() use.
+uint liveNarrow = StringPoolMutator.SetNarrowCacheSlot(
+    allocator,
+    stringPoolAddress,
+    index: 25,
+    value: "Telemetry/Hero");
+
+uint liveWide = StringPoolMutator.SetWideCacheSlot(
+    allocator,
+    stringPoolAddress,
+    index: 25,
+    value: "Telemetry/Hero");
+```
+
+The static-slot path updates `ms_aString[index]`. The raw live-cache path writes directly to `m_apZMString[index]` and `m_apZWString[index]` without taking `m_lock`, so it is mainly for controlled tooling and tests. For live-client replacement, `SubstituteSlot` is the safer API.
 
 ## Example
 
@@ -55,7 +136,7 @@ Benchmarks.
 
 ## Example Catalogue
 
-The following examples are available in [ReadMeTest.cs](src/Maple.StringPool.XyzTest/ReadMeTest.cs).
+The following examples are available in [ReadMeTest.cs](src/Maple.StringPool.DocTest/ReadMeTest.cs).
 
 ### Example - Empty
 
@@ -130,145 +211,7 @@ sp MapleStory.exe info
 
 ## Public API Reference
 
-```csharp
-[assembly: System.Reflection.AssemblyMetadata("IsAotCompatible", "True")]
-[assembly: System.Reflection.AssemblyMetadata("IsTrimmable", "True")]
-[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/Bia10/Maple.StringPool/")]
-[assembly: System.Resources.NeutralResourcesLanguage("en")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Maple.StringPool.Benchmarks")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Maple.StringPool.ComparisonBenchmarks")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Maple.StringPool.Test")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Maple.StringPool.XyzTest")]
-[assembly: System.Runtime.Versioning.TargetFramework(".NETCoreApp,Version=v10.0", FrameworkDisplayName=".NET 10.0")]
-namespace Maple.StringPool
-{
-    public static class KnownLayouts
-    {
-        public static readonly Maple.StringPool.StringPoolAddresses GmsV95;
-    }
-    public readonly struct StringPoolAddresses : System.IEquatable<Maple.StringPool.StringPoolAddresses>
-    {
-        public required uint ImageBase { get; init; }
-        public required uint MsAKey { get; init; }
-        public required uint MsAString { get; init; }
-        public required uint MsNKeySize { get; init; }
-        public required uint MsNSize { get; init; }
-    }
-    public sealed class StringPoolDecoder : System.IDisposable
-    {
-        public StringPoolDecoder(Maple.StringPool.Source.IPeImageReader reader, Maple.StringPool.StringPoolAddresses? addresses = default) { }
-        public int Count { get; }
-        public int KeySize { get; }
-        public System.ReadOnlySpan<byte> MasterKey { get; }
-        public void Dispose() { }
-        public System.Collections.Generic.IEnumerable<Maple.StringPool.StringPoolEntry> Find(string term, System.StringComparison comparison = 5) { }
-        public System.Collections.Generic.IEnumerable<Maple.StringPool.StringPoolEntry> GetAll() { }
-        public string GetBSTR(uint index) { }
-        public System.Collections.Generic.IEnumerable<Maple.StringPool.StringPoolEntry> GetRange(uint start, uint end) { }
-        public string GetString(uint index) { }
-        public string GetStringW(uint index) { }
-        public static Maple.StringPool.StringPoolDecoder FromBytes(byte[] peImage, Maple.StringPool.StringPoolAddresses? addresses = default) { }
-        public static Maple.StringPool.StringPoolDecoder Open(string exePath, Maple.StringPool.StringPoolAddresses? addresses = default) { }
-    }
-    public readonly struct StringPoolEntry : System.IEquatable<Maple.StringPool.StringPoolEntry>
-    {
-        public StringPoolEntry(uint Index, string Value) { }
-        public uint Index { get; init; }
-        public string Value { get; init; }
-        public override string ToString() { }
-    }
-}
-namespace Maple.StringPool.NativeTypes
-{
-    public readonly ref struct EncodedEntryLayout
-    {
-        public const int BodyOffset = 1;
-        public const int SeedBytes = 1;
-        public const int SeedOffset = 0;
-    }
-    public readonly ref struct StringPoolKeyLayout
-    {
-        public const int KeyArrayOffset = 0;
-        public const int TotalBytes = 4;
-    }
-    public readonly ref struct StringPoolLayout
-    {
-        public const int LockOffset = 8;
-        public const int NarrowCacheOffset = 0;
-        public const int TotalBytes = 16;
-        public const int WideCacheOffset = 4;
-    }
-    public static class TypeSizes
-    {
-        public const int Int32 = 4;
-        public const int Pointer = 4;
-    }
-    public static class ZArray
-    {
-        public static byte[] ReadByteElements(System.ReadOnlySpan<byte> image, int payloadFileOffset, int count) { }
-        public static int ReadCount(System.ReadOnlySpan<byte> image, int payloadFileOffset) { }
-        public static uint[] ReadPointerElements(System.ReadOnlySpan<byte> image, int payloadFileOffset, int count) { }
-    }
-    public readonly ref struct ZArrayLayout
-    {
-        public const int CountOffset = 0;
-        public const int HeaderBytes = 4;
-        public const int PayloadOffset = 4;
-        public ZArrayLayout(int elementCount) { }
-        public int ElementCount { get; }
-        public int TotalBytes(int elementSize) { }
-    }
-    public readonly struct ZFatalSection
-    {
-        public ZFatalSection(uint tibPointer, int refCount) { }
-        public int RefCount { get; }
-        public uint TibPointer { get; }
-        public static Maple.StringPool.NativeTypes.ZFatalSection Unlocked { get; }
-    }
-    public readonly ref struct ZFatalSectionLayout
-    {
-        public const int RefCountOffset = 4;
-        public const int TibPointerOffset = 0;
-        public const int TotalBytes = 8;
-    }
-    public readonly struct ZXString
-    {
-        public ZXString(string value, int refCount = 1, int capacity = 0, int byteLength = 0) { }
-        public int ByteLength { get; }
-        public int Capacity { get; }
-        public int RefCount { get; }
-        public string Value { get; }
-        public override string ToString() { }
-        public static Maple.StringPool.NativeTypes.ZXString ReadFrom(System.ReadOnlySpan<byte> image, int payloadFileOffset) { }
-        public static string op_Implicit(Maple.StringPool.NativeTypes.ZXString s) { }
-    }
-    public readonly ref struct ZXStringDataLayout
-    {
-        public const int ByteLengthOffset = 8;
-        public const int CapacityOffset = 4;
-        public const int HeaderBytes = 12;
-        public const int NullTerminatorBytes = 1;
-        public const int PayloadOffset = 12;
-        public const int RefCountOffset = 0;
-        public ZXStringDataLayout(int payloadBytes) { }
-        public int TotalBytes { get; }
-    }
-}
-namespace Maple.StringPool.Source
-{
-    public interface IPeImageReader : System.IDisposable
-    {
-        System.ReadOnlyMemory<byte> Image { get; }
-    }
-    public sealed class MemoryPeImageReader : Maple.StringPool.Source.IPeImageReader, System.IDisposable
-    {
-        public System.ReadOnlyMemory<byte> Image { get; }
-        public void Dispose() { }
-        public static Maple.StringPool.Source.MemoryPeImageReader FromBytes(byte[] image) { }
-        public static Maple.StringPool.Source.MemoryPeImageReader FromFile(string path) { }
-    }
-}
-```
+See [docs/PublicApi.md](docs/PublicApi.md) for the full generated public API surface.
 
 ## Design Notes
 

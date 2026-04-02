@@ -1,4 +1,4 @@
-namespace Maple.StringPool;
+﻿namespace Maple.StringPool;
 
 /// <summary>
 /// An immutable decoded entry from <c>StringPool</c>.
